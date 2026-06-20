@@ -82,12 +82,12 @@ pub fn is_prime(n: u64) -> bool {
     if n < 4 {
         return true;
     }
-    if n % 2 == 0 {
+    if n.is_multiple_of(2) {
         return false;
     }
     let mut i = 3u64;
     while i * i <= n {
-        if n % i == 0 {
+        if n.is_multiple_of(i) {
             return false;
         }
         i += 2;
@@ -150,10 +150,7 @@ pub fn chicken_hash(data: &[u8]) -> [u8; 8] {
 fn mix_state(state: &mut [u8; 32]) {
     let prev = *state;
     for j in 0..32 {
-        state[j] = prev[j]
-            .wrapping_add(prev[(j + 1) % 32])
-            .rotate_left(3)
-            ^ prev[(j + 7) % 32];
+        state[j] = prev[j].wrapping_add(prev[(j + 1) % 32]).rotate_left(3) ^ prev[(j + 7) % 32];
     }
 }
 
@@ -196,7 +193,7 @@ pub fn generate_keys(owner: &str, bits: u32) -> (KeyFile, KeyFile) {
         "bits must be in range 256..=4096, got {bits}"
     );
 
-    let n_pairs = ((bits as usize) + 9) / 10; // ceil(bits / 10)
+    let n_pairs = (bits as usize).div_ceil(10);
     let all_pairs = valid_prime_pairs();
     assert!(!all_pairs.is_empty(), "no valid prime pairs available");
 
@@ -251,11 +248,7 @@ pub fn generate_keys(owner: &str, bits: u32) -> (KeyFile, KeyFile) {
 /// the word "chicken" repeated `value + 1` times, space separated.
 fn chicken_line(value: u64) -> String {
     let count = value + 1;
-    let mut parts = Vec::with_capacity(count as usize);
-    for _ in 0..count {
-        parts.push("chicken");
-    }
-    parts.join(" ")
+    vec!["chicken"; count as usize].join(" ")
 }
 
 const MINI_SEPARATOR: &str = "0";
@@ -312,7 +305,7 @@ fn parse_chicken_sections(input: &str) -> Result<Vec<Vec<u64>>, String> {
             let v = parse_chicken_line(line)?;
             sections.last_mut().unwrap().push(v);
         }
-        if sections.last().map_or(false, |s| s.is_empty()) {
+        if sections.last().is_some_and(|s| s.is_empty()) {
             sections.pop();
         }
         Ok(sections)
@@ -367,10 +360,7 @@ impl KeyFile {
             data_section.push(pair.exponent);
             data_section.push(pair.modulus);
         }
-        serialize_chicken_sections(
-            &[&type_section, &owner_section, &data_section],
-            minichicken,
-        )
+        serialize_chicken_sections(&[&type_section, &owner_section, &data_section], minichicken)
     }
 
     pub fn from_chicken_format(input: &str) -> Result<Self, String> {
@@ -466,7 +456,11 @@ impl CipherData {
 pub fn encrypt(plaintext: &[u8], key: &KeyFile) -> CipherData {
     assert!(!key.pairs.is_empty(), "key has no pairs");
     let n = key.pairs.len();
-    let prefixed: Vec<u8> = MAGIC_PREFIX.iter().chain(plaintext.iter()).copied().collect();
+    let prefixed: Vec<u8> = MAGIC_PREFIX
+        .iter()
+        .chain(plaintext.iter())
+        .copied()
+        .collect();
     let values = prefixed
         .iter()
         .enumerate()
@@ -580,7 +574,9 @@ pub fn verify(cipher: &CipherData, public_key: &KeyFile) -> Result<(), String> {
 
 pub fn resolve_key_path(path: &str) -> PathBuf {
     let p = Path::new(path);
-    if p.parent().map_or(true, |parent| parent.as_os_str().is_empty()) {
+    if p.parent()
+        .is_none_or(|parent| parent.as_os_str().is_empty())
+    {
         let mut dir = dirs::home_dir().expect("cannot determine home directory");
         dir.push(".cek");
         dir.push(path);
@@ -687,8 +683,14 @@ mod tests {
             key_type: KeyType::Public,
             owner: "cluckmaster".to_string(),
             pairs: vec![
-                KeyPair { exponent: 5, modulus: 323 },
-                KeyPair { exponent: 3, modulus: 667 },
+                KeyPair {
+                    exponent: 5,
+                    modulus: 323,
+                },
+                KeyPair {
+                    exponent: 3,
+                    modulus: 667,
+                },
             ],
         };
 
@@ -708,7 +710,10 @@ mod tests {
 
         let mini = kf.to_chicken_format(true);
         // type=1(+1=2), owner "cluckmaster" bytes +1, data values +1
-        assert_eq!(mini, "2 0 100 109 118 100 108 110 98 116 117 102 115 0 6 324 4 668");
+        assert_eq!(
+            mini,
+            "2 0 100 109 118 100 108 110 98 116 117 102 115 0 6 324 4 668"
+        );
         let parsed_mini = KeyFile::from_chicken_format(&mini).unwrap();
         assert_eq!(parsed_mini, kf);
     }
@@ -718,7 +723,10 @@ mod tests {
         let kf_priv = KeyFile {
             key_type: KeyType::Private,
             owner: "a".to_string(),
-            pairs: vec![KeyPair { exponent: 10, modulus: 323 }],
+            pairs: vec![KeyPair {
+                exponent: 10,
+                modulus: 323,
+            }],
         };
         let mini = kf_priv.to_chicken_format(true);
         assert!(mini.starts_with("3 0")); // Private = 2, stored as 3

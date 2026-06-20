@@ -50,10 +50,13 @@ fn main() {
             process::exit(1);
         }
         (true, false) => {
-            let key_path = resolve_key_for_mode(&args.key, "pub", "encryption (recipient's public key)");
+            let key_path =
+                resolve_key_for_mode(&args.key, "pub", "encryption (recipient's public key)");
             let key = read_key(&key_path);
             if key.key_type == KeyType::Private {
-                eprintln!("error: encryption requires the recipient's public key, but got a private key");
+                eprintln!(
+                    "error: encryption requires the recipient's public key, but got a private key"
+                );
                 process::exit(1);
             }
             let bytes = read_input_bytes(&args.input);

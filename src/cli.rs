@@ -21,7 +21,7 @@ pub fn find_keys_in_default_dir(extension: &str) -> Vec<PathBuf> {
     let mut keys: Vec<PathBuf> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|p| p.extension().map_or(false, |ext| ext == extension))
+        .filter(|p| p.extension().is_some_and(|ext| ext == extension))
         .collect();
     keys.sort();
     keys
@@ -60,9 +60,7 @@ pub fn select_key_interactive(keys: &[PathBuf], mode: &str) -> PathBuf {
             }
             match key_event.code {
                 KeyCode::Up => {
-                    if selected > 0 {
-                        selected -= 1;
-                    }
+                    selected = selected.saturating_sub(1);
                 }
                 KeyCode::Down => {
                     if selected < labels.len() - 1 {

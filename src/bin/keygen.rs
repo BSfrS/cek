@@ -6,7 +6,10 @@ use std::process;
 
 /// chicken-keygen: generate key pairs in the Chicken format.
 #[derive(Parser, Debug)]
-#[command(name = "chicken-keygen", about = "Generate key pairs in the Chicken format")]
+#[command(
+    name = "chicken-keygen",
+    about = "Generate key pairs in the Chicken format"
+)]
 struct Args {
     /// Owner name (e.g., cluckmaster)
     #[arg(short = 'c', long = "chicken")]
@@ -37,11 +40,11 @@ fn main() {
     let args = Args::parse();
 
     let pub_out = resolve_key_path(
-        &args.pubout.unwrap_or_else(|| format!("{}.pub", args.chicken)),
+        &args
+            .pubout
+            .unwrap_or_else(|| format!("{}.pub", args.chicken)),
     );
-    let key_out = resolve_key_path(
-        &args.out.unwrap_or_else(|| format!("{}.cek", args.chicken)),
-    );
+    let key_out = resolve_key_path(&args.out.unwrap_or_else(|| format!("{}.cek", args.chicken)));
 
     if !args.force {
         let mut existing = Vec::new();
@@ -58,7 +61,9 @@ fn main() {
             );
             io::stderr().flush().ok();
             let mut answer = String::new();
-            if io::stdin().lock().read_line(&mut answer).is_err() || !answer.trim().eq_ignore_ascii_case("y") {
+            if io::stdin().lock().read_line(&mut answer).is_err()
+                || !answer.trim().eq_ignore_ascii_case("y")
+            {
                 eprintln!("Aborted.");
                 process::exit(1);
             }
@@ -72,17 +77,26 @@ fn main() {
 
     if let Some(parent) = pub_out.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!("error: failed to create directory {}: {e}", parent.display());
+            eprintln!(
+                "error: failed to create directory {}: {e}",
+                parent.display()
+            );
             process::exit(1);
         }
     }
 
     if let Err(e) = fs::write(&pub_out, public_text) {
-        eprintln!("error: failed to write public key to {}: {e}", pub_out.display());
+        eprintln!(
+            "error: failed to write public key to {}: {e}",
+            pub_out.display()
+        );
         process::exit(1);
     }
     if let Err(e) = fs::write(&key_out, private_text) {
-        eprintln!("error: failed to write private key to {}: {e}", key_out.display());
+        eprintln!(
+            "error: failed to write private key to {}: {e}",
+            key_out.display()
+        );
         process::exit(1);
     }
 

@@ -72,10 +72,13 @@ fn main() {
             eprintln!("Signed '{}' with key '{}'.", args.input, key.owner);
         }
         (false, true) => {
-            let key_path = resolve_key_for_mode(&args.key, "pub", "verification (signer's public key)");
+            let key_path =
+                resolve_key_for_mode(&args.key, "pub", "verification (signer's public key)");
             let key = read_key(&key_path);
             if key.key_type == KeyType::Private {
-                eprintln!("error: verification requires the signer's public key, but got a private key");
+                eprintln!(
+                    "error: verification requires the signer's public key, but got a private key"
+                );
                 process::exit(1);
             }
             let text = read_input_text(&Some(args.input.clone()));
