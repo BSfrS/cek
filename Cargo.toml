@@ -1,0 +1,30 @@
+[package]
+name = "cek"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.28"
+dirs = "5"
+rand = "0.8"
+
+[[bin]]
+name = "chicken-keygen"
+path = "src/bin/keygen.rs"
+
+[[bin]]
+name = "chicken-crypt"
+path = "src/bin/crypt.rs"
+
+[[bin]]
+name = "chicken-sign"
+path = "src/bin/sign.rs"
+
+[[bin]]
+name = "chicken-convert"
+path = "src/bin/convert.rs"
+
+[lib]
+name = "cek"
+path = "src/lib.rs"
