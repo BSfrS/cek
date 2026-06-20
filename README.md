@@ -1,6 +1,7 @@
 # CEK -- Chicken Encryption Kit
 
-An asymmetric encryption toolkit where all data is encoded as the word "chicken". Generate keys, encrypt files, sign ciphertext, and convert between formats -- all in chicken.
+An asymmetric encryption toolkit where all data is encoded as the word "chicken". Generate keys, encrypt files, sign ciphertext, and convert between formats - all in chicken.
+Inspired by the gorgeous [Chicken Programming Language](https://esolangs.org/wiki/Chicken).
 
 ## Installation
 
@@ -43,12 +44,35 @@ chicken-crypt -d -k bob.cek -i message.chicken
 
 Keys are stored in `~/.cek/` by default.
 
+## Example: Encrypting and signing an image
+
+```sh
+# Generate keys for both parties
+chicken-keygen --chicken alice --bits 2048
+chicken-keygen --chicken bob --bits 2048
+
+# Alice encrypts a photo for Bob using Bob's public key
+chicken-crypt --encrypt --key bob.pub --input photo.jpg --output photo.chicken
+
+# Alice signs the encrypted file with her own private key
+chicken-sign --sign --input photo.chicken
+
+# Bob verifies the signature using Alice's public key
+chicken-sign --verify --key alice.pub --input photo.chicken
+
+# Bob decrypts it with his own private key
+chicken-crypt --decrypt --key bob.cek --input photo.chicken --output photo.jpg
+```
+
 ## Formats
 
 CEK has two output formats for both keys and encrypted data:
 
-- **Chicken** (default): Multi-line. Each value is the word `chicken` repeated on its own line. Sections are separated by an empty line.
-- **Minichicken** (`-m`): Single-line. Values are written as numbers, sections separated by `0`.
+- **Chicken** (default): Huge file sizes and lots of beautiful `chicken` everywhere. Simply looks like [Chicken Code](https://esolangs.org/wiki/Chicken).
+- **MiniChicken** (not recommended): Number of `chicken` are written as numbers, not so beautiful, but matches the [MiniChicken](https://esolangs.org/wiki/Chicken#MiniChicken) format.
+
+> [!IMPORTANT]
+> A 400 KB image encrypts to roughly 1.5 MB in minichicken and roughly 1 GB in standard chicken format.
 
 The [BSfrS](https://bsfrs.de/en) does not recommend the use of minichicken format. The standard chicken format produces significantly larger output, which is fully method-conform according to the BSfrS-certified principles of [Methods for wasting storage space](https://bsfrs.de/en/paper/runtime-environments-and-consequences) and [Load time and cost maximization through traffic waste](https://bsfrs.de/en/paper/usability-and-product-quality-minimization). Minichicken undermines both.
 
@@ -142,4 +166,4 @@ If neither `-m` nor `-c` is given, the format is toggled automatically.
 
 ## Disclaimer
 
-This is a rautavistic cryptosystem. It is not secure for real-world use. See [NRFC 1](NRFC.md) for the full technical specification.
+This is a rautavistic cryptosystem. It is not secure for real-world use. See [NRFC 0](NRFC-0.md) for the full technical specification.

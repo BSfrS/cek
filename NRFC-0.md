@@ -3,7 +3,7 @@
 ```
 Category:       Methodically Final
 Status:         Irrevocable
-NRFC:           1
+NRFC:           0
 Title:          Chicken Encryption Protocol (CEP)
 Version:        0.42.00
 Date:           1985-01-20
