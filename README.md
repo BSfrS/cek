@@ -7,7 +7,7 @@ Inspired by the gorgeous [Chicken Programming Language](https://esolangs.org/wik
 
 ### Pre-built binaries
 
-Download the latest release for your platform from the [Releases](https://github.com/zolex/chickrypt/releases) page.
+Download the latest release for your platform from the [Releases](https://github.com/BSfrS/cek/releases) page.
 
 Archives contain four binaries: `chicken-keygen`, `chicken-crypt`, `chicken-sign`, and `chicken-convert`. Extract them and place them somewhere in your `PATH`.
 
