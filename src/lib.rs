@@ -7,7 +7,7 @@
 pub mod cli;
 
 use rand::seq::SliceRandom;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub const MAGIC_PREFIX: [u8; 3] = [0xC4, 0x1C, 0xEB];
 
@@ -573,17 +573,19 @@ pub fn verify(cipher: &CipherData, public_key: &KeyFile) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 
 pub fn resolve_key_path(path: &str) -> PathBuf {
-    let p = Path::new(path);
-    if p.parent()
-        .is_none_or(|parent| parent.as_os_str().is_empty())
-    {
-        let mut dir = dirs::home_dir().expect("cannot determine home directory");
-        dir.push(".cek");
-        dir.push(path);
-        dir
-    } else {
-        PathBuf::from(path)
+    let p = PathBuf::from(path);
+    if p.exists() {
+        return p;
     }
+
+    let mut fallback = dirs::home_dir().expect("cannot determine home directory");
+    fallback.push(".cek");
+    fallback.push(path);
+    if fallback.exists() {
+        return fallback;
+    }
+
+    p
 }
 
 // ---------------------------------------------------------------------------
