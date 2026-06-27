@@ -1,11 +1,11 @@
 use crate::*;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal;
+use rpassword;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process;
-use rpassword;
 
 pub fn find_keys_in_default_dir(extension: &str) -> Vec<PathBuf> {
     let mut dir = match dirs::home_dir() {

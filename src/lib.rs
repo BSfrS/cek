@@ -179,25 +179,36 @@ fn derive_key_stream(password: &str, length: usize) -> Vec<u64> {
 /// (8-bit), so XOR results stay within 10 bits — valid chicken-format values.
 fn password_xor(data: &[u64], password: &str) -> Vec<u64> {
     let key_stream = derive_key_stream(password, data.len());
-    data.iter().zip(key_stream.iter()).map(|(&d, &k)| d ^ k).collect()
+    data.iter()
+        .zip(key_stream.iter())
+        .map(|(&d, &k)| d ^ k)
+        .collect()
 }
 
 /// Return 8 verification values (0–255 each) derived from the password hash.
 /// Stored in the key file so a wrong password can be detected early.
 fn password_verify_values(password: &str) -> Vec<u64> {
-    chicken_hash(password.as_bytes()).iter().map(|&b| b as u64).collect()
+    chicken_hash(password.as_bytes())
+        .iter()
+        .map(|&b| b as u64)
+        .collect()
 }
 
 /// Return `true` if `input` is in minichicken (single-line) format.
 pub fn is_minichicken_format(input: &str) -> bool {
-    input.split_whitespace().next().map_or(false, |t| t != "chicken")
+    input
+        .split_whitespace()
+        .next()
+        .is_some_and(|t| t != "chicken")
 }
 
 /// Return `true` if `input` appears to be a password-protected key file
 /// (key type marker == `PasswordProtected`).
 pub fn is_password_protected(input: &str) -> bool {
     match parse_chicken_sections(input) {
-        Ok(sections) => sections.first().and_then(|s| s.first()) == Some(&(KeyType::PasswordProtected as u64)),
+        Ok(sections) => {
+            sections.first().and_then(|s| s.first()) == Some(&(KeyType::PasswordProtected as u64))
+        }
         Err(_) => false,
     }
 }
@@ -416,7 +427,9 @@ impl KeyFile {
         let sections = parse_chicken_sections(input)?;
         // Detect password-protected key before the section-count check.
         if sections.first().and_then(|s| s.first()) == Some(&(KeyType::PasswordProtected as u64)) {
-            return Err("this key is password-protected; provide a password to decrypt it".to_string());
+            return Err(
+                "this key is password-protected; provide a password to decrypt it".to_string(),
+            );
         }
         if sections.len() != 3 {
             return Err(format!(
@@ -468,7 +481,12 @@ impl KeyFile {
         let encrypted_data = password_xor(&data_section, password);
 
         serialize_chicken_sections(
-            &[&type_section, &owner_section, &verify_section, &encrypted_data],
+            &[
+                &type_section,
+                &owner_section,
+                &verify_section,
+                &encrypted_data,
+            ],
             minichicken,
         )
     }
@@ -496,7 +514,7 @@ impl KeyFile {
         }
 
         let data = password_xor(&sections[3], password);
-        if data.len() % 2 != 0 {
+        if !data.len().is_multiple_of(2) {
             return Err(format!(
                 "decrypted key data must contain an even number of values, got {}",
                 data.len()

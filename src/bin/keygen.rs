@@ -91,10 +91,7 @@ fn main() {
             }
         };
         if !is_password_protected(&raw) {
-            eprintln!(
-                "error: {} is not password-protected",
-                key_path.display()
-            );
+            eprintln!("error: {} is not password-protected", key_path.display());
             process::exit(1);
         }
         let to_mini = is_minichicken_format(&raw);
@@ -187,6 +184,10 @@ fn main() {
     eprintln!(
         "  private key -> {}{}",
         key_out.display(),
-        if args.password { " (password protected)" } else { "" }
+        if args.password {
+            " (password protected)"
+        } else {
+            ""
+        }
     );
 }
