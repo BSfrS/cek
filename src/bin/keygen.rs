@@ -1,3 +1,4 @@
+use cek::cli::*;
 use cek::*;
 use clap::Parser;
 use std::fs;
@@ -12,8 +13,8 @@ use std::process;
 )]
 struct Args {
     /// Owner name (e.g., cluckmaster)
-    #[arg(short = 'c', long = "chicken")]
-    chicken: String,
+    #[arg(short = 'c', long = "chicken", required_unless_present_any = ["add_password", "remove_password"])]
+    chicken: Option<String>,
 
     /// Use minichicken format (single-line). Default is standard multi-line chicken format.
     #[arg(short = 'm', long = "minichicken")]
@@ -34,17 +35,89 @@ struct Args {
     /// Overwrite existing key files without prompting.
     #[arg(short = 'f', long = "force")]
     force: bool,
+
+    /// Protect the new private key with a password.
+    #[arg(short = 'p', long = "password")]
+    password: bool,
+
+    /// Add password protection to an existing private key (skips key generation).
+    #[arg(short = 'a', long = "add-password")]
+    add_password: bool,
+
+    /// Remove password protection from an existing private key (skips key generation).
+    #[arg(short = 'r', long = "remove-password")]
+    remove_password: bool,
+
+    /// Private key file (used with --add-password / --remove-password; interactive if omitted).
+    #[arg(short = 'k', long = "key")]
+    key: Option<String>,
 }
 
 fn main() {
     let args = Args::parse();
 
-    let pub_out = resolve_key_path(
-        &args
-            .pubout
-            .unwrap_or_else(|| format!("{}.pub", args.chicken)),
-    );
-    let key_out = resolve_key_path(&args.out.unwrap_or_else(|| format!("{}.cek", args.chicken)));
+    if args.add_password {
+        let key_path = resolve_key_for_mode(&args.key, "cek", "password protection");
+        let raw = match fs::read_to_string(&key_path) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("error: failed to read {}: {e}", key_path.display());
+                process::exit(1);
+            }
+        };
+        let to_mini = is_minichicken_format(&raw);
+        let key = read_key(&key_path);
+        if key.key_type != KeyType::Private {
+            eprintln!("error: can only add password protection to a private key");
+            process::exit(1);
+        }
+        let password = read_password_confirmed();
+        let text = key.to_protected_chicken_format(&password, to_mini);
+        if let Err(e) = fs::write(&key_path, &text) {
+            eprintln!(
+                "error: failed to write key file {}: {e}",
+                key_path.display()
+            );
+            process::exit(1);
+        }
+        eprintln!("Password protection added to {}.", key_path.display());
+        return;
+    }
+
+    if args.remove_password {
+        let key_path = resolve_key_for_mode(&args.key, "cek", "password removal");
+        let raw = match fs::read_to_string(&key_path) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("error: failed to read {}: {e}", key_path.display());
+                process::exit(1);
+            }
+        };
+        if !is_password_protected(&raw) {
+            eprintln!(
+                "error: {} is not password-protected",
+                key_path.display()
+            );
+            process::exit(1);
+        }
+        let to_mini = is_minichicken_format(&raw);
+        let key = read_key(&key_path);
+        let text = key.to_chicken_format(to_mini);
+        if let Err(e) = fs::write(&key_path, &text) {
+            eprintln!(
+                "error: failed to write key file {}: {e}",
+                key_path.display()
+            );
+            process::exit(1);
+        }
+        eprintln!("Password protection removed from {}.", key_path.display());
+        return;
+    }
+
+    let owner = args.chicken.as_deref().unwrap();
+
+    let pub_out = resolve_key_path(&args.pubout.unwrap_or_else(|| format!("{owner}.pub")));
+    let key_out = resolve_key_path(&args.out.unwrap_or_else(|| format!("{owner}.cek")));
 
     if !args.force {
         let mut existing = Vec::new();
@@ -70,10 +143,15 @@ fn main() {
         }
     }
 
-    let (public_key, private_key) = generate_keys(&args.chicken, args.bits);
+    let (public_key, private_key) = generate_keys(owner, args.bits);
 
     let public_text = public_key.to_chicken_format(args.minichicken);
-    let private_text = private_key.to_chicken_format(args.minichicken);
+    let private_text = if args.password {
+        let pw = read_password_confirmed();
+        private_key.to_protected_chicken_format(&pw, args.minichicken)
+    } else {
+        private_key.to_chicken_format(args.minichicken)
+    };
 
     if let Some(parent) = pub_out.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
@@ -101,7 +179,11 @@ fn main() {
     }
 
     let pairs = public_key.pairs.len();
-    eprintln!("Generated {pairs} key pair(s) for '{}'.", args.chicken);
+    eprintln!("Generated {pairs} key pair(s) for '{owner}'.");
     eprintln!("  public key  -> {}", pub_out.display());
-    eprintln!("  private key -> {}", key_out.display());
+    eprintln!(
+        "  private key -> {}{}",
+        key_out.display(),
+        if args.password { " (password protected)" } else { "" }
+    );
 }

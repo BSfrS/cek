@@ -155,13 +155,62 @@ fn mix_state(state: &mut [u8; 32]) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Key types
+// 3. Password helpers
+// ---------------------------------------------------------------------------
+
+/// Derive a stream of `length` bytes from `password` via iterative chicken_hash.
+/// Each output byte is returned as a `u64` (range 0–255).
+fn derive_key_stream(password: &str, length: usize) -> Vec<u64> {
+    let mut stream: Vec<u8> = Vec::new();
+    let mut seed = password.as_bytes().to_vec();
+    while stream.len() < length {
+        let hash = chicken_hash(&seed);
+        stream.extend_from_slice(&hash);
+        seed = hash.to_vec();
+    }
+    stream.truncate(length);
+    stream.iter().map(|&b| b as u64).collect()
+}
+
+/// XOR each value in `data` with a byte from the password-derived key stream.
+/// XOR is its own inverse, so the same function encrypts and decrypts.
+///
+/// All key data values are ≤ 1023 (10-bit) and key stream bytes are ≤ 255
+/// (8-bit), so XOR results stay within 10 bits — valid chicken-format values.
+fn password_xor(data: &[u64], password: &str) -> Vec<u64> {
+    let key_stream = derive_key_stream(password, data.len());
+    data.iter().zip(key_stream.iter()).map(|(&d, &k)| d ^ k).collect()
+}
+
+/// Return 8 verification values (0–255 each) derived from the password hash.
+/// Stored in the key file so a wrong password can be detected early.
+fn password_verify_values(password: &str) -> Vec<u64> {
+    chicken_hash(password.as_bytes()).iter().map(|&b| b as u64).collect()
+}
+
+/// Return `true` if `input` is in minichicken (single-line) format.
+pub fn is_minichicken_format(input: &str) -> bool {
+    input.split_whitespace().next().map_or(false, |t| t != "chicken")
+}
+
+/// Return `true` if `input` appears to be a password-protected key file
+/// (key type marker == `PasswordProtected`).
+pub fn is_password_protected(input: &str) -> bool {
+    match parse_chicken_sections(input) {
+        Ok(sections) => sections.first().and_then(|s| s.first()) == Some(&(KeyType::PasswordProtected as u64)),
+        Err(_) => false,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 4. Key types
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyType {
     Public = 1,
     Private = 2,
+    PasswordProtected = 3,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -365,6 +414,10 @@ impl KeyFile {
 
     pub fn from_chicken_format(input: &str) -> Result<Self, String> {
         let sections = parse_chicken_sections(input)?;
+        // Detect password-protected key before the section-count check.
+        if sections.first().and_then(|s| s.first()) == Some(&(KeyType::PasswordProtected as u64)) {
+            return Err("this key is password-protected; provide a password to decrypt it".to_string());
+        }
         if sections.len() != 3 {
             return Err(format!(
                 "key file must have 3 sections (type, owner, data), got {}",
@@ -393,6 +446,71 @@ impl KeyFile {
             .collect();
         Ok(KeyFile {
             key_type,
+            owner,
+            pairs,
+        })
+    }
+
+    /// Serialize this private key as a password-protected chicken / minichicken file.
+    ///
+    /// The output is valid chicken format: key type marker 3, owner section,
+    /// verification section (8 hash bytes), and XOR-encrypted key data.
+    pub fn to_protected_chicken_format(&self, password: &str, minichicken: bool) -> String {
+        let type_section = [KeyType::PasswordProtected as u64];
+        let owner_section = owner_to_values(&self.owner);
+        let verify_section = password_verify_values(password);
+
+        let mut data_section = Vec::with_capacity(self.pairs.len() * 2);
+        for pair in &self.pairs {
+            data_section.push(pair.exponent);
+            data_section.push(pair.modulus);
+        }
+        let encrypted_data = password_xor(&data_section, password);
+
+        serialize_chicken_sections(
+            &[&type_section, &owner_section, &verify_section, &encrypted_data],
+            minichicken,
+        )
+    }
+
+    /// Parse a password-protected chicken / minichicken key file, decrypt it,
+    /// and return a plain `Private` key.
+    ///
+    /// Returns an error if the password is incorrect or the file is malformed.
+    pub fn from_protected_chicken_format(input: &str, password: &str) -> Result<Self, String> {
+        let sections = parse_chicken_sections(input)?;
+        if sections.len() != 4 {
+            return Err(format!(
+                "password-protected key file must have 4 sections, got {}",
+                sections.len()
+            ));
+        }
+        if sections[0].as_slice() != [KeyType::PasswordProtected as u64] {
+            return Err("not a password-protected key file".to_string());
+        }
+        let owner = values_to_owner(&sections[1])?;
+
+        let expected_verify = password_verify_values(password);
+        if sections[2] != expected_verify {
+            return Err("incorrect password".to_string());
+        }
+
+        let data = password_xor(&sections[3], password);
+        if data.len() % 2 != 0 {
+            return Err(format!(
+                "decrypted key data must contain an even number of values, got {}",
+                data.len()
+            ));
+        }
+        let pairs = data
+            .chunks_exact(2)
+            .map(|c| KeyPair {
+                exponent: c[0],
+                modulus: c[1],
+            })
+            .collect();
+        Ok(KeyFile {
+            key_type: KeyType::Private,
             owner,
             pairs,
         })
@@ -842,6 +960,44 @@ mod tests {
             sig[0] = sig[0].wrapping_add(1);
         }
         assert!(verify(&signed, &pubk).is_err());
+    }
+
+    #[test]
+    fn test_password_protected_roundtrip() {
+        let (_, privk) = generate_keys("hen", 256);
+        for mini in [false, true] {
+            let protected = privk.to_protected_chicken_format("s3cr3t", mini);
+            assert!(is_password_protected(&protected));
+            let recovered = KeyFile::from_protected_chicken_format(&protected, "s3cr3t").unwrap();
+            assert_eq!(recovered.key_type, KeyType::Private);
+            assert_eq!(recovered.owner, privk.owner);
+            assert_eq!(recovered.pairs, privk.pairs);
+        }
+    }
+
+    #[test]
+    fn test_password_protected_wrong_password() {
+        let (_, privk) = generate_keys("hen", 256);
+        let protected = privk.to_protected_chicken_format("correct", false);
+        assert!(KeyFile::from_protected_chicken_format(&protected, "wrong").is_err());
+    }
+
+    #[test]
+    fn test_password_protected_rejected_by_from_chicken_format() {
+        let (_, privk) = generate_keys("hen", 256);
+        let protected = privk.to_protected_chicken_format("pw", false);
+        let err = KeyFile::from_chicken_format(&protected).unwrap_err();
+        assert!(err.contains("password-protected"));
+    }
+
+    #[test]
+    fn test_password_protected_encrypt_decrypt_e2e() {
+        let (pubk, privk) = generate_keys("hen", 256);
+        let protected = privk.to_protected_chicken_format("pw", false);
+        let recovered = KeyFile::from_protected_chicken_format(&protected, "pw").unwrap();
+        let cipher = encrypt(b"bock bock", &pubk);
+        let plain = decrypt(&cipher, &recovered).unwrap();
+        assert_eq!(plain, b"bock bock");
     }
 
     #[test]

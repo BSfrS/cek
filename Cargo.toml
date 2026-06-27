@@ -8,6 +8,7 @@ clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
 dirs = "5"
 rand = "0.8"
+rpassword = "7"
 
 [[bin]]
 name = "chicken-keygen"

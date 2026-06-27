@@ -56,11 +56,27 @@ fn main() {
         !is_minichicken(&text)
     };
 
-    let output = if let Ok(key) = KeyFile::from_chicken_format(&text) {
+    let output = if is_password_protected(&text) {
+        let label = if to_mini { "minichicken" } else { "chicken" };
+        let password = read_password("Password: ");
+        let key = match KeyFile::from_protected_chicken_format(&text, &password) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!("error: {e}");
+                process::exit(1);
+            }
+        };
+        eprintln!(
+            "Converting password-protected private key for '{}' to {label} format.",
+            key.owner
+        );
+        key.to_protected_chicken_format(&password, to_mini)
+    } else if let Ok(key) = KeyFile::from_chicken_format(&text) {
         let label = if to_mini { "minichicken" } else { "chicken" };
         let kind = match key.key_type {
             KeyType::Public => "public key",
             KeyType::Private => "private key",
+            KeyType::PasswordProtected => unreachable!(),
         };
         eprintln!("Converting {kind} for '{}' to {label} format.", key.owner);
         key.to_chicken_format(to_mini)

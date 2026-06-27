@@ -5,6 +5,7 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process;
+use rpassword;
 
 pub fn find_keys_in_default_dir(extension: &str) -> Vec<PathBuf> {
     let mut dir = match dirs::home_dir() {
@@ -173,6 +174,24 @@ pub fn resolve_key_for_mode(key_arg: &Option<String>, extension: &str, mode: &st
     }
 }
 
+pub fn read_password(prompt: &str) -> String {
+    rpassword::prompt_password(prompt).unwrap_or_else(|e| {
+        eprintln!("error: failed to read password: {e}");
+        process::exit(1);
+    })
+}
+
+pub fn read_password_confirmed() -> String {
+    loop {
+        let pw = read_password("Password: ");
+        let confirm = read_password("Confirm password: ");
+        if pw == confirm {
+            return pw;
+        }
+        eprintln!("Passwords do not match, try again.");
+    }
+}
+
 pub fn read_key(path: &std::path::Path) -> KeyFile {
     let text = match fs::read_to_string(path) {
         Ok(t) => t,
@@ -181,6 +200,16 @@ pub fn read_key(path: &std::path::Path) -> KeyFile {
             process::exit(1);
         }
     };
+    if is_password_protected(&text) {
+        let password = read_password("Password: ");
+        return match KeyFile::from_protected_chicken_format(&text, &password) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!("error: {e}");
+                process::exit(1);
+            }
+        };
+    }
     match KeyFile::from_chicken_format(&text) {
         Ok(k) => k,
         Err(e) => {
