@@ -1,16 +1,25 @@
-.PHONY: build release test clean install
+.PHONY: build release test clean install fix help
 
-build:
+.DEFAULT_GOAL := help
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+build: ## Build debug binary
 	cargo build
 
-release:
+release: ## Build optimized release binary
 	cargo build --release
 
-test:
+test: ## Run tests
 	cargo test
 
-clean:
-	cargo clean
+fix: ## Auto-fix rustfmt and clippy findings
+	cargo fmt
+	cargo clippy --fix --allow-dirty --allow-staged
 
-install:
+install: ## Install binary via cargo
 	cargo install --path .
+
+clean: ## Remove build artifacts
+	cargo clean
