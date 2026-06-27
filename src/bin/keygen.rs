@@ -3,6 +3,7 @@ use cek::*;
 use clap::Parser;
 use std::fs;
 use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 use std::process;
 
 /// chicken-keygen: generate key pairs in the Chicken format.
@@ -24,11 +25,7 @@ struct Args {
     #[arg(short = 'b', long = "bits", default_value_t = 1024, value_parser = clap::value_parser!(u32).range(256..=4096))]
     bits: u32,
 
-    /// Output path for public key. Default: ~/.cek/<owner>.pub
-    #[arg(long = "pubout")]
-    pubout: Option<String>,
-
-    /// Output path for private key. Default: ~/.cek/<owner>.cek
+    /// Output directory for key files. Default: ~/.cek/
     #[arg(long = "out")]
     out: Option<String>,
 
@@ -116,8 +113,16 @@ fn main() {
 
     let owner = args.chicken.as_deref().unwrap();
 
-    let pub_out = resolve_key_path(&args.pubout.unwrap_or_else(|| format!("{owner}.pub")));
-    let key_out = resolve_key_path(&args.out.unwrap_or_else(|| format!("{owner}.cek")));
+    let out_dir = match &args.out {
+        Some(dir) => PathBuf::from(dir),
+        None => {
+            let mut d = dirs::home_dir().expect("cannot determine home directory");
+            d.push(".cek");
+            d
+        }
+    };
+    let pub_out = out_dir.join(format!("{owner}.pub"));
+    let key_out = out_dir.join(format!("{owner}.cek"));
 
     if !args.force {
         let mut existing = Vec::new();
@@ -153,14 +158,12 @@ fn main() {
         private_key.to_chicken_format(args.minichicken)
     };
 
-    if let Some(parent) = pub_out.parent() {
-        if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!(
-                "error: failed to create directory {}: {e}",
-                parent.display()
-            );
-            process::exit(1);
-        }
+    if let Err(e) = fs::create_dir_all(&out_dir) {
+        eprintln!(
+            "error: failed to create directory {}: {e}",
+            out_dir.display()
+        );
+        process::exit(1);
     }
 
     if let Err(e) = fs::write(&pub_out, public_text) {
